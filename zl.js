@@ -591,7 +591,7 @@
         
         setTimeout(() => {
             notificationElement.classList.remove('show');
-        }, 3000);
+        }, 100);
     }
 
     // 数据管理函数
@@ -908,7 +908,7 @@
             // URL变化时自动获取用户信息并更新按钮颜色
             setTimeout(() => {
                 getUserInfo();
-            }, 1000);
+            }, 100);
         } else {
             floatingButtonContainer.style.display = 'none';
             profileWindow.style.right = '-450px';

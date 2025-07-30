@@ -1,3 +1,15 @@
+// ==UserScript==
+// @name         ig客户资料登记
+// @namespace    https://github.com/qza666/
+// @version      1.1
+// @description  Instagram客户资料管理+翻译
+// @author       发财
+// @match        *instagram.com/direct*
+// @grant        GM_xmlhttpRequest
+// @connect      205.189.160.50
+// ==/UserScript==
+
+
 (function() {
     'use strict';
 

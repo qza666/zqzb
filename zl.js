@@ -1,13 +1,3 @@
-// ==UserScript==
-// @name         Instagram Customer Profile Manager
-// @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  Instagram客户资料管理系统 - 右侧固定面板版本
-// @author       You
-// @match        https://www.instagram.com/*
-// @grant        GM_xmlhttpRequest
-// ==/UserScript==
-
 (function() {
     'use strict';
 
@@ -1031,3 +1021,154 @@
 
     observer.observe(document, { subtree: true, childList: true });
 })();
+
+
+
+(function () {
+  'use strict';
+
+  const API_URL = "http://205.189.160.50:5555/translate";
+  const SELECTOR = ".x10wlt62>div>span>div";
+  const CACHE_KEY = "translation_cache_v1";
+
+  // 加载本地缓存
+  let translationCache = {};
+  try {
+    const saved = localStorage.getItem(CACHE_KEY);
+    if (saved) translationCache = JSON.parse(saved);
+  } catch (e) {
+    console.warn("翻译缓存读取失败", e);
+  }
+
+  // 保存缓存到 localStorage
+  function saveCache() {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(translationCache));
+  }
+
+  // 翻译一个元素
+  function translateElement(e) {
+    if (e.__translating) return; // 正在翻译中
+    const originalText = e.textContent.trim();
+    if (!originalText) return;
+
+    // 如果已有翻译结果，则跳过
+    if (e.__translated && e.dataset.translationText === originalText) return;
+
+    e.__translating = true;
+    e.dataset.translationText = originalText;
+
+    // 如果已有翻译框，先移除旧的
+    const oldDiv = e.querySelector(".translation-result");
+    if (oldDiv) oldDiv.remove();
+
+    // 创建翻译显示容器
+    const d = document.createElement("div");
+    d.className = "translation-result";
+    Object.assign(d.style, {
+      background: "rgba(220,220,220,0.2)",
+      padding: "4px",
+      fontSize: "smaller",
+      marginTop: "4px",
+      cursor: "default",
+      userSelect: "text",
+    });
+    d.textContent = "翻译中...";
+    e.appendChild(d);
+
+    // 缓存命中
+    if (translationCache[originalText]) {
+      d.textContent = translationCache[originalText];
+      e.__translated = true;
+      e.__translating = false;
+      return;
+    }
+
+    // 错误重试处理
+    function showRetry() {
+      d.textContent = "翻译出错，点击重试";
+      d.style.cursor = "pointer";
+      d.onclick = () => {
+        e.__translating = false;
+        translateElement(e);
+      };
+    }
+
+    // 发出翻译请求
+    GM_xmlhttpRequest({
+      method: "POST",
+      url: API_URL,
+      headers: { "Content-Type": "application/json" },
+      data: JSON.stringify({
+        text: originalText,
+        target_lang: "zh",
+        preserve_formatting: true,
+      }),
+      onload(response) {
+        try {
+          const data = JSON.parse(response.responseText);
+          const translated = data.translated_text?.trim() || "";
+          if (translated) {
+            d.textContent = translated;
+            d.style.cursor = "default";
+            d.onclick = null;
+            e.__translated = true;
+            // 缓存翻译结果
+            translationCache[originalText] = translated;
+            saveCache();
+          } else {
+            showRetry();
+          }
+        } catch (err) {
+          console.error("翻译失败解析错误", err);
+          showRetry();
+        } finally {
+          e.__translating = false;
+        }
+      },
+      onerror() {
+        console.error("翻译失败 onerror");
+        showRetry();
+        e.__translating = false;
+      },
+      ontimeout() {
+        console.error("翻译失败 timeout");
+        showRetry();
+        e.__translating = false;
+      },
+    });
+  }
+
+  // 扫描已有节点
+  function scanAndTranslate(root = document) {
+    root.querySelectorAll(SELECTOR).forEach(translateElement);
+  }
+
+  // 初次扫描
+  scanAndTranslate();
+
+  // 观察 DOM 变化
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      m.addedNodes.forEach((node) => {
+        if (!(node instanceof HTMLElement)) return;
+        if (node.matches(SELECTOR)) translateElement(node);
+        else scanAndTranslate(node);
+      });
+      if (m.type === "characterData" && m.target.parentElement) {
+        const parent = m.target.parentElement;
+        if (parent.matches && parent.matches(SELECTOR)) {
+          parent.__translated = false;
+          translateElement(parent);
+        }
+      }
+    }
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+})();
+
+
